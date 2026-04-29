@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>宠物项圈实时位置</title>
+    <style>
+        body, html, #map { margin:0; padding:0; width:100%; height:100%; }
+        .info { position:fixed; bottom:20px; left:10px; background:white; padding:6px 12px; 
+                border-radius:20px; box-shadow:0 2px 6px rgba(0,0,0,0.3); font-size:14px; z-index:999; }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+    <div class="info" id="status">正在获取位置...</div>
+
+    <!-- 引入高德地图 JS API，注意key替换 -->
+    <script src="https://webapi.amap.com/maps?v=2.0&key=f857784adb1301e5e3cc24178fd273a0"></script>
+    <!-- 引入 crypto-js 用于机智云签名计算 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+
+    <script>
+        // ========== 改成你自己的参数 ==========
+        const GIZWITS_APP_ID = "038bb7b7721143279c96f10fa1a3866c";
+        const GIZWITS_APP_SECRET = "f30b345b111543618c7ea361b3b593c2";
+        const PRODUCT_KEY = "c5f0ab6ea4354a99bd58b7027f1dddd4";
+        const DEVICE_ID = "Von63bypVBrgg9CfhrF1to";
+        // ====================================
+
+        const API_HOST = "https://api.gizwits.com";
+
+        // 初始化地图，默认中心可以随便写（北京）
+        let map = new AMap.Map('map', {
+            resizeEnable: true,
+            zoom: 16,
+            center: [116.397428, 39.90923]
+        });
+
+        let marker = null;
+
+        // 机智云签名生成 SHA256
+        function makeSignature(timestamp, appSecret) {
+            let signStr = GIZWITS_APP_ID + "_" + timestamp + "_" + appSecret;
+            return CryptoJS.SHA256(signStr).toString(CryptoJS.enc.Hex);
+        }
+
+        // 请求设备最新数据
+        async function fetchDeviceData() {
+            let timestamp = Date.now().toString();
+            let signature = makeSignature(timestamp, GIZWITS_APP_SECRET);
+            let url = `${API_HOST}/app/devdata/${DEVICE_ID}/latest?product_key=${PRODUCT_KEY}`;
+
+            try {
+                let response = await fetch(url, {
+                    method: 'GET',
+                    headers: {
+                        'X-Gizwits-Application-Id': GIZWITS_APP_ID,
+                        'X-Gizwits-Timestamp': timestamp,
+                        'X-Gizwits-Signature': signature
+                    }
+                });
+                let data = await response.json();
+                return data;
+            } catch (err) {
+                console.error("请求失败:", err);
+                return null;
+            }
+        }
+
+        // 从返回JSON中提取经纬度（需要根据你的数据点名字修改）
+        function parseLatLng(apiData) {
+            if (!apiData || !apiData.attr) return null;
+            // ⚠️ 重点：这里字段名必须和机智云数据点标识名一致！
+            let lng = apiData.attr.Longitude;   // 经度数据点名称
+            let lat = apiData.attr.Latitude;    // 纬度数据点名称
+            if (lng !== undefined && lat !== undefined) {
+                // 有时数据可能是字符串，转为数字
+                return { lng: Number(lng), lat: Number(lat) };
+            }
+            return null;
+        }
+
+        // 更新地图上的标记
+        function updateMap(position) {
+            document.getElementById('status').innerText = 
+                `位置: ${position.lng.toFixed(5)}, ${position.lat.toFixed(5)}  [${new Date().toLocaleTimeString()}]`;
+
+            if (!marker) {
+                marker = new AMap.Marker({
+                    position: [position.lng, position.lat],
+                    title: "宠物项圈",
+                    map: map
+                });
+                map.setCenter([position.lng, position.lat]);
+            } else {
+                marker.setPosition([position.lng, position.lat]);
+            }
+        }
+
+        // 定时循环拉取
+        async function loop() {
+            let data = await fetchDeviceData();
+            console.log("机智云返回原始数据:", data);
+            let pos = parseLatLng(data);
+            if (pos) {
+                updateMap(pos);
+            } else {
+                document.getElementById('status').innerText = "等待位置数据...";
+            }
+        }
+
+        setInterval(loop, 4000); // 4秒更新一次
+        loop(); // 立即执行一次
+    </script>
+</body>
+</html>
