@@ -14,7 +14,7 @@
     <div id="map"></div>
     <div class="info" id="status">正在获取位置...</div>
 
-    <!-- 引入高德地图 JS API，注意key替换 -->
+    <!-- 引入高德地图 JS API -->
     <script src="https://webapi.amap.com/maps?v=2.0&key=f857784adb1301e5e3cc24178fd273a0"></script>
     <!-- 引入 crypto-js 用于机智云签名计算 -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
@@ -67,14 +67,19 @@
             }
         }
 
-        // 从返回JSON中提取经纬度（需要根据你的数据点名字修改）
+        // 创建宠物图标（只创建一次，放在外面）
+        var petIcon = new AMap.Icon({
+            size: new AMap.Size(40, 40),       // 图标尺寸
+            image: 'https://img.icons8.com/color/48/000000/dog-footprint.png', // 狗爪图标
+            imageSize: new AMap.Size(40, 40)    // 图片实际大小
+        });
+
+        // 从返回JSON中提取经纬度
         function parseLatLng(apiData) {
             if (!apiData || !apiData.attr) return null;
-            // ⚠️ 重点：这里字段名必须和机智云数据点标识名一致！
             let lng = apiData.attr.Longitude;   // 经度数据点名称
             let lat = apiData.attr.Latitude;    // 纬度数据点名称
             if (lng !== undefined && lat !== undefined) {
-                // 有时数据可能是字符串，转为数字
                 return { lng: Number(lng), lat: Number(lat) };
             }
             return null;
@@ -86,13 +91,16 @@
                 `位置: ${position.lng.toFixed(5)}, ${position.lat.toFixed(5)}  [${new Date().toLocaleTimeString()}]`;
 
             if (!marker) {
+                // 第一次：创建带宠物图标的标记
                 marker = new AMap.Marker({
                     position: [position.lng, position.lat],
+                    icon: petIcon,           // 使用宠物图标
                     title: "宠物项圈",
                     map: map
                 });
                 map.setCenter([position.lng, position.lat]);
             } else {
+                // 之后：只更新位置
                 marker.setPosition([position.lng, position.lat]);
             }
         }
